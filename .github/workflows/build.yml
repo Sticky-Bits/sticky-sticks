@@ -1,0 +1,31 @@
+name: Build and test
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Build
+        shell: pwsh
+        run: ./build.ps1
+      - name: Self tests
+        shell: pwsh
+        run: |
+          $process = Start-Process ./publish/StickySticks.exe -ArgumentList '--self-test' -Wait -PassThru -RedirectStandardError self-test.log
+          Get-Content self-test.log
+          if ($process.ExitCode -ne 0) { throw "Self tests failed: $($process.ExitCode)" }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: StickySticks-win-x64
+          path: |
+            publish/**
+            !publish/**/*.pdb

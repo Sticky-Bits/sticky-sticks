@@ -1,0 +1,57 @@
+name: Release
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: write
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  release:
+    runs-on: windows-latest
+    env:
+      RELEASE_TAG: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Validate tag and build
+        shell: pwsh
+        run: |
+          if ($env:RELEASE_TAG -notmatch '^v\d+\.\d+(\.\d+)?$') {
+            throw 'Use a version tag such as v0.1 or v0.1.1.'
+          }
+          ./build.ps1 -Version $env:RELEASE_TAG.Substring(1)
+      - name: Self tests
+        shell: pwsh
+        run: |
+          $process = Start-Process ./publish/StickySticks.exe -ArgumentList '--self-test' -Wait -PassThru -RedirectStandardError self-test.log
+          Get-Content self-test.log
+          if ($process.ExitCode -ne 0) { throw "Self tests failed: $($process.ExitCode)" }
+      - name: Package
+        shell: pwsh
+        run: |
+          $archive = "StickySticks-$env:RELEASE_TAG-win-x64.zip"
+          $files = Get-ChildItem publish | Where-Object Extension -ne '.pdb'
+          Compress-Archive -Path $files.FullName -DestinationPath $archive
+          $hash = (Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  $archive" | Set-Content "$archive.sha256" -Encoding ascii
+          @'
+          Extract the entire ZIP, then run StickySticks.exe.
+
+          Requires Windows x64 and .NET 10 Desktop Runtime (x64):
+          https://dotnet.microsoft.com/en-us/download/dotnet/10.0
+
+          Includes official SDL, the controller database, and licence notices. This build is unsigned.
+          '@ | Set-Content release-notes.md
+      - name: Publish GitHub Release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          $archive = "StickySticks-$env:RELEASE_TAG-win-x64.zip"
+          gh release create $env:RELEASE_TAG $archive "$archive.sha256" --verify-tag --title "Sticky Sticks $env:RELEASE_TAG" --notes-file release-notes.md --generate-notes
+          if ($LASTEXITCODE -ne 0) { throw 'GitHub release creation failed.' }
