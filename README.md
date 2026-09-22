@@ -2,6 +2,8 @@
 
 A Windows controller visualizer and thumbstick analyzer, with a settings preview for **Rivals of Aether 2**. Version **0.2**.
 
+![Application Screenshot](docs/images/sticky-sticks.png)
+
 ## Run
 
 Download the `StickySticks-vX.Y-win-x64.zip` asset from **Releases** on GitHub, extract it, then run `StickySticks.exe`.
