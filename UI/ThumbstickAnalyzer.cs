@@ -2,7 +2,7 @@ using System.Diagnostics;
 
 sealed class ThumbstickAnalyzer : Panel
 {
-    readonly StickView view;
+    readonly ControllerSession session;
     readonly Button start = new() { Text = "Start Test", Width = 120, Height = 36, Dock = DockStyle.Right };
     readonly Label stageTitle = new() { Text = "Circular Sweeps", Dock = DockStyle.Fill, Font = new Font("Segoe UI", 18, FontStyle.Bold), ForeColor = Color.White };
     readonly Label instructions = new() { Text = "Roll your stick at medium speed around the perimeter of the gate to record the maximum values produced. Use a mix of clockwise and counter clockwise movement as directed.", Dock = DockStyle.Fill, ForeColor = Color.FromArgb(192, 204, 223) };
@@ -21,10 +21,10 @@ sealed class ThumbstickAnalyzer : Panel
     readonly TriggerStartLatch triggerStart = new();
     ControllerSource? triggerSource;
 
-    public ThumbstickAnalyzer(StickView view)
+    public ThumbstickAnalyzer(ControllerSession session)
     {
-        this.view = view; view.StopAnalyzer = StopAsync;
-        view.Sampled += OnSample;
+        this.session = session; session.StopAnalyzer = StopAsync;
+        session.Sampled += OnSample;
         BackColor = DarkTheme.Background; Padding = new Padding(28, 20, 28, 16);
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         foreach (float height in new[] { 66f, 42, 52, 42 }) layout.RowStyles.Add(new RowStyle(SizeType.Absolute, height));
@@ -39,23 +39,24 @@ sealed class ThumbstickAnalyzer : Panel
         plots.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50)); plots.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
         plots.Controls.Add(left, 0, 0); plots.Controls.Add(right, 1, 0); layout.Controls.Add(plots, 0, 4);
         Controls.Add(layout);
-        start.Click += async (_, _) => { if (view.AnalyzerBusy) await StopAsync(); else StartTest(); };
+        start.Click += async (_, _) => { if (session.AnalyzerBusy) await StopAsync(); else StartTest(); };
         timer.Tick += async (_, _) => await UpdateRecording();
         status.Text = "Press Start Test or RT to begin.";
     }
 
     void OnSample(ControllerFrame? frame)
     {
-        if (triggerSource != view.Source) { triggerSource = view.Source; triggerStart.Reset(); }
-        bool canStart = Visible && !view.AnalyzerBusy && !finishing && stopping == null && !view.IsScanning && !view.IsConnecting;
+        start.Enabled = session.Source is not KeyboardSource;
+        if (session.Source is KeyboardSource) status.Text = "Select a controller to run the thumbstick tests.";
+        if (triggerSource != session.Source) { triggerSource = session.Source; triggerStart.Reset(); }
+        bool canStart = session.Source is not KeyboardSource && Visible && !session.AnalyzerBusy && !finishing && stopping == null && !session.IsScanning && !session.IsConnecting;
         bool shortcut = triggerStart.Update(frame?.RightTrigger, canStart);
         if (Visible)
         {
             double Axis(int axis)
             {
-                int index = view.Mapping[axis];
-                return frame != null && index >= 0 && index < frame.Values.Length
-                    ? frame.Values[index] * (view.Invert[axis] ? -1 : 1) : 0;
+                double value = AxisMapping.Read(frame, axis, session.Mapping, session.Invert);
+                return double.IsFinite(value) ? value : 0;
             }
             // Preview only: don't send idle values to the binning or stage runner.
             left.Data = left.Data with { X = Axis(0), Y = Axis(1) };
@@ -68,19 +69,19 @@ sealed class ThumbstickAnalyzer : Panel
     void StartTest()
     {
         if (stopping != null || finishing) return;
-        if (view.Source == null || view.IsScanning || view.IsConnecting)
+        if (session.Source is KeyboardSource) { status.Text = "Select a controller to run the thumbstick tests."; return; }
+        if (session.Source == null || session.IsScanning || session.IsConnecting)
         { status.Text = "Select a connected controller before starting."; return; }
-        if (view.Mapping.Any(i => i < 0 || i >= view.Source.Axes.Length))
+        if (session.Mapping.Any(i => i < 0 || i >= session.Source.Axes.Length))
         { status.Text = "Select valid X and Y mappings for both sticks in Settings."; return; }
         perimeter = new();
         SetResultsLayout(false);
         flicks = new();
-        polling = new(view.Source.HasReportStream);
+        polling = new(session.Source.HasReportStream);
         run = new AnalyzerRun(perimeter, flicks, polling); // Append future stages here.
         left.FlickData = right.FlickData = null;
         left.ShowResults = right.ShowResults = false;
-        view.AnalyzerBusy = true;
-        view.AnalyzerRecording = new AnalyzerCapture(view.Source, view.Mapping, view.Invert, run.Observe);
+        session.StartCapture(run.Observe);
         start.Text = "Stop Test";
         stageTitle.Text = perimeter.Title; instructions.Text = perimeter.Instructions;
         status.Text = "Recording both sticks · rotate around the full perimeter.";
@@ -100,14 +101,14 @@ sealed class ThumbstickAnalyzer : Panel
         {
             var flickData = flicks.Snapshot(); left.FlickData = flickData.Left; right.FlickData = flickData.Right;
         }
-        left.IsRecording = right.IsRecording = view.AnalyzerBusy;
+        left.IsRecording = right.IsRecording = session.AnalyzerBusy;
         left.PollingData = right.PollingData = run?.Current == polling ? polling.Snapshot() : null;
         left.Invalidate(); right.Invalidate();
     }
     async Task UpdateRecording()
     {
         if (finishing || stopping != null) return;
-        var capture = view.AnalyzerRecording;
+        var capture = session.AnalyzerRecording;
         if (capture == null || run == null) return;
         RefreshPlots();
         if (capture.Error != null || (capture.Elapsed > 3 && capture.Latest == null) ||
@@ -158,21 +159,20 @@ sealed class ThumbstickAnalyzer : Panel
     async Task StopCore()
     {
         timer.Stop();
-        var capture = view.AnalyzerRecording;
-        if (capture != null) { await capture.StopAsync(); view.AnalyzerRecording = null; }
-        if (view.AnalyzerBusy && !finishing) status.Text = "Stopped · incomplete results are not graded. Press Start Test to begin again.";
-        view.AnalyzerBusy = false; start.Text = "Start Test";
+        await session.StopCapture();
+        if (session.AnalyzerBusy && !finishing) status.Text = "Stopped · incomplete results are not graded. Press Start Test to begin again.";
+        session.AnalyzerBusy = false; start.Text = "Start Test";
         left.IsRecording = right.IsRecording = false; left.Invalidate(); right.Invalidate();
         await Task.Yield(); stopping = null;
     }
     protected override void Dispose(bool disposing)
-    { if (disposing) { view.Sampled -= OnSample; timer.Dispose(); stageTitle.Font.Dispose(); resultGradeFont.Dispose(); } base.Dispose(disposing); }
+    { if (disposing) { session.Sampled -= OnSample; timer.Dispose(); stageTitle.Font.Dispose(); resultGradeFont.Dispose(); } base.Dispose(disposing); }
 
     public static void Preview(string path, bool showFlicks = false)
     {
         Application.EnableVisualStyles();
-        using var view = new StickView();
-        using var page = new ThumbstickAnalyzer(view) { Dock = DockStyle.Fill };
+        var session = new ControllerSession();
+        using var page = new ThumbstickAnalyzer(session) { Dock = DockStyle.Fill };
         using var form = new Form { ClientSize = new Size(1100, 900), Text = "Sticky Sticks · Synthetic perimeter preview" };
         DarkTheme.StyleWindow(form); form.Controls.Add(page);
         for (int n = 0; n < 5; n++)
@@ -185,7 +185,7 @@ sealed class ThumbstickAnalyzer : Panel
         page.RefreshPlots(); page.status.Text = "Synthetic preview · rotate around the full perimeter.";
         if (showFlicks)
         {
-            page.run = new AnalyzerRun(page.flicks); view.AnalyzerBusy = true;
+            page.run = new AnalyzerRun(page.flicks); session.AnalyzerBusy = true;
             for (int i = 0; i <= 110; i++) page.flicks.Observe(new(0, 1, 0, 1, true, true, i * .01));
             page.flicks.Observe(new(0, 1, 0, -.12, true, true, 1.11));
             page.stageTitle.Text = page.flicks.Title; page.instructions.Text = page.flicks.Instructions;
@@ -203,8 +203,9 @@ sealed class ThumbstickAnalyzer : Panel
     {
         StickScrollPanel.VerifyResize();
         var source = new SweepSource();
-        using var view = new StickView { Source = source };
-        using var page = new ThumbstickAnalyzer(view) { Dock = DockStyle.Fill };
+        var session = new ControllerSession();
+        session.Source = source;
+        using var page = new ThumbstickAnalyzer(session) { Dock = DockStyle.Fill };
         source.SweepState = () => page.perimeter.Snapshot();
         source.FlickState = () => page.run?.Current == page.flicks ? page.flicks.Snapshot() : null;
         using var form = new Form { ClientSize = new Size(1000, 850), Text = "Sticky Sticks · Automatic sweep test" };
@@ -218,20 +219,20 @@ sealed class ThumbstickAnalyzer : Panel
                 if (page.left.Data.X != .65 || page.right.Data.Y != .7 || page.perimeter.Snapshot().Left.Filled != 0)
                     throw new Exception("Idle preview changed bins or failed to move dots.");
                 page.OnSample(idle with { RightTrigger = 26 });
-                if (!view.AnalyzerBusy) throw new Exception("RT did not start the test.");
+                if (!session.AnalyzerBusy) throw new Exception("RT did not start the test.");
                 var startedRun = page.run;
                 page.OnSample(idle with { RightTrigger = 255 });
-                if (!view.AnalyzerBusy || !ReferenceEquals(startedRun, page.run)) throw new Exception("Held RT restarted or stopped capture.");
+                if (!session.AnalyzerBusy || !ReferenceEquals(startedRun, page.run)) throw new Exception("Held RT restarted or stopped capture.");
                 var timeout = Stopwatch.StartNew();
-                while (view.AnalyzerBusy && timeout.Elapsed.TotalSeconds < 8) await Task.Delay(20);
-                if (view.AnalyzerBusy || page.run?.Complete != true || !page.left.ShowResults || !page.right.ShowResults)
+                while (session.AnalyzerBusy && timeout.Elapsed.TotalSeconds < 8) await Task.Delay(20);
+                if (session.AnalyzerBusy || page.run?.Complete != true || !page.left.ShowResults || !page.right.ShowResults)
                     throw new Exception("Automatic completion/results failed.");
                 using (var bitmap = new Bitmap(page.Width, page.Height))
                 { page.DrawToBitmap(bitmap, page.ClientRectangle); bitmap.Save(path + ".png"); }
                 page.OnSample(idle with { RightTrigger = 255 });
-                if (view.AnalyzerBusy) throw new Exception("Held RT restarted a completed test.");
+                if (session.AnalyzerBusy) throw new Exception("Held RT restarted a completed test.");
                 page.StartTest(); await page.StopAsync(); await page.StopAsync();
-                if (view.AnalyzerRecording != null || view.AnalyzerBusy) throw new Exception("Stop did not release capture.");
+                if (session.AnalyzerRecording != null || session.AnalyzerBusy) throw new Exception("Stop did not release capture.");
                 File.WriteAllText(path, "PASS: idle preview without capture, RT start, held RT ignored during/after capture, automatic results and cancellation.");
             }
             catch (Exception ex) { File.WriteAllText(path, "FAIL: " + ex); }
@@ -271,4 +272,5 @@ sealed class ThumbstickAnalyzer : Panel
         }
     }
 }
+
 

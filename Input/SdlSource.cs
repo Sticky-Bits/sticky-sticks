@@ -80,7 +80,9 @@ sealed class SdlSource : ControllerSource
             raw[i] = value;
             values[i] = XInput.Normalize(value);
         }
-        return new(values, raw, detail) { RightTrigger = Math.Max(0, (int)SDL_GetGamepadAxis(gamepad, 5)) * 255.0 / 32767 };
+        return new(values, raw, detail) {
+            RightTrigger = Math.Max(0, (int)SDL_GetGamepadAxis(gamepad, 5)) * 255.0 / 32767,
+            LeftTrigger = Math.Max(0, (int)SDL_GetGamepadAxis(gamepad, 4)) * 255.0 / 32767 };
     }
 
     public override ValueTask DisposeAsync()

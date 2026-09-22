@@ -5,12 +5,14 @@ static class StickProcessing
     public static double RightThresholdRawBoundary(int thresholdPercent) =>
         HardPressRawBoundary(RightDeadzonePercent, 100, thresholdPercent);
     public static double LeftDeadzoneThreshold(int percent) => Math.Clamp(percent / 100.0, 0, 1);
-    public static double HardPressRawBoundary(int deadzonePercent, int sensitivityPercent, int hardPressPercent)
+    public static double MechanicRawBoundary(int deadzonePercent, int sensitivityPercent, double gameThreshold)
     {
         double deadzone = LeftDeadzoneThreshold(deadzonePercent);
         if (sensitivityPercent <= 0 || deadzone >= 1) return double.PositiveInfinity;
-        return deadzone + (1 - deadzone) * hardPressPercent / sensitivityPercent;
+        return deadzone + (1 - deadzone) * gameThreshold / (sensitivityPercent / 100.0);
     }
+    public static double HardPressRawBoundary(int deadzonePercent, int sensitivityPercent, int hardPressPercent) =>
+        MechanicRawBoundary(deadzonePercent, sensitivityPercent, hardPressPercent / 100.0);
     public static double LeftOutput(double value, int deadzonePercent, int sensitivityPercent) =>
         LeftDeadzone(value, deadzonePercent) * sensitivityPercent / 100.0;
     // Remove the deadzone, then linearly map the remaining travel to the full output range.
@@ -46,6 +48,9 @@ static class StickProcessing
         Check(LeftOutput(1, 50, 200), 2);
         Check(LeftOutput(-1, 10, 300), -3);
         Check(HardPressRawBoundary(10, 120, 80), 0.7);
+        Check(MechanicRawBoundary(10, 120, .8), .7);
+        Check(MechanicRawBoundary(50, 100, .3), .65);
+        Check(LeftOutput(-MechanicRawBoundary(50, 200, .8), 50, 200), -.8);
         Check(LeftOutput(HardPressRawBoundary(50, 200, 80), 50, 200), 0.8);
         Check(LeftOutput(-HardPressRawBoundary(50, 200, 80), 50, 200), -0.8);
         Check(HardPressRawBoundary(10, 50, 61), 1.198);

@@ -1,7 +1,7 @@
 using System.Diagnostics;
 
 // Owns native reads while active. UI rendering observes Latest, never polls alongside
-// this worker. Aggregation is bounded (360 bins per stick), even during a long sweep.
+// this worker. Aggregation is bounded (36 bins per stick), even during a long sweep.
 sealed class AnalyzerCapture
 {
     readonly ControllerSource source;
@@ -49,7 +49,7 @@ sealed class AnalyzerCapture
     {
         if (mapping.Any(i => i < 0 || i >= frame.Values.Length))
         { Volatile.Write(ref error, "Both sticks need valid X and Y axis mappings."); return; }
-        double Axis(int i) => frame.Values[mapping[i]] * (inversion[i] ? -1 : 1);
+        double Axis(int i) => AxisMapping.Read(frame, i, mapping, inversion);
         double lx = Axis(0), ly = Axis(1), rx = Axis(2), ry = Axis(3);
         if (!double.IsFinite(lx) || !double.IsFinite(ly) || !double.IsFinite(rx) || !double.IsFinite(ry)) return;
         lock (sync)

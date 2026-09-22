@@ -4,6 +4,16 @@ sealed class UtilityPages : Panel
     public UtilityPages(StickView view, TuningControls tuning)
     {
         Name = "UtilityPages";
+        var profileLoader = new ProfileLoader(tuning);
+        view.Session.SourceChanged += UpdateInputMode;
+        void UpdateInputMode()
+        {
+            bool keyboard = view.Session.Source is KeyboardSource;
+            tuning.SetKeyboard(keyboard);
+            profileLoader.Enabled = !keyboard;
+        }
+        Disposed += (_, _) => view.Session.SourceChanged -= UpdateInputMode;
+        UpdateInputMode();
         BackColor = DarkTheme.Background;
         var rivals = new Panel
         {
@@ -15,8 +25,17 @@ sealed class UtilityPages : Panel
         view.Height = 640;
         plots.Controls.Add(view);
         rivals.Controls.Add(plots);
-        rivals.Controls.Add(tuning);
-        var analyzer = new ThumbstickAnalyzer(view)
+        var sidebar = new Panel
+        {
+            Dock = DockStyle.Right, Width = 320, AutoScroll = true,
+            BackColor = DarkTheme.Surface, Padding = new Padding(8)
+        };
+        tuning.Dock = DockStyle.Top;
+        sidebar.Controls.Add(new CollapsibleSection("Stick Settings", tuning));
+        sidebar.Controls.Add(new CollapsibleSection("Mechanics", new MechanicsControls(view)));
+        sidebar.Controls.Add(new CollapsibleSection("Profiles", profileLoader));
+        rivals.Controls.Add(sidebar);
+        var analyzer = new ThumbstickAnalyzer(view.Session)
         {
             Name = "AnalyzerPage", Dock = DockStyle.Fill, BackColor = BackColor, Visible = false
         };
@@ -36,7 +55,7 @@ sealed class UtilityPages : Panel
         Controls.Add(rivals); Controls.Add(analyzer); Controls.Add(navigation);
         void SelectPage(bool showRivals)
         {
-            if (showRivals && view.AnalyzerBusy) _ = analyzer.StopAsync();
+            if (showRivals && view.Session.AnalyzerBusy) _ = analyzer.StopAsync();
             rivals.Visible = showRivals; analyzer.Visible = !showRivals;
             rivalsButton.BackColor = showRivals ? Color.FromArgb(39, 49, 67) : DarkTheme.Surface;
             analyzerButton.BackColor = !showRivals ? Color.FromArgb(39, 49, 67) : DarkTheme.Surface;
@@ -83,5 +102,3 @@ sealed class StickScrollPanel(Control content) : Panel
         form.Close();
     }
 }
-
-

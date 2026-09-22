@@ -1,6 +1,6 @@
 # Sticky Sticks
 
-A Windows controller visualizer and thumbstick analyzer, with a settings preview for **Rivals of Aether 2**. Version **0.1**.
+A Windows controller visualizer and thumbstick analyzer, with a settings preview for **Rivals of Aether 2**. Version **0.2**.
 
 ## Run
 
@@ -11,16 +11,9 @@ Keep `SDL3.dll`, `gamecontrollerdb.txt`, the app DLL/JSON files, and licence fil
 
 Requires Windows x64 and the [.NET 10 Desktop Runtime (x64)](https://dotnet.microsoft.com/en-us/download/dotnet/10.0). The SDK is only needed to build. If the runtime is missing, the launcher offers a download link. Rivals and Steam are not required. Downloads are unsigned and may trigger Windows reputation warnings.
 
-## Input sources
+## Supported Input sources
 
-- **SDL 3:** preferred automatically when available; uses official upstream SDL, not a game-supplied DLL.
-- **XInput:** Xbox-compatible and Steam-emulated controllers.
-- **Direct USB:** Nintendo Switch Pro controllers with stored calibration.
-- **Windows joystick:** legacy WinMM devices, with configurable axes.
-
-Select a device at the top. Refresh preserves the current device if it remains available. Settings contains axis mappings, inversions, display rounding, and the optional octagonal reference gate. SDL Y axes are inverted by default for positive-up diagrams. WinMM defaults to X/Y and R/U; some Switch Pro drivers expose malformed legacy axes, so SDL is preferable for those devices.
-
-To compare Steam Input, add the app as a non-Steam game and launch it through Steam with matching controller settings. Steam may pause emulated input when the application loses focus. The connection indicator reports focus, not proof of continued input delivery.
+Keyboard, SDL 3, XInput, Direct USB for Nintendo Switch Pro controllers, Windows joystick API.
 
 ## Build and test
 

@@ -6,21 +6,26 @@ sealed class ControllerToolbar : Panel
     readonly ComboBox[] axes = new ComboBox[4];
     readonly CheckBox[] inversions = new CheckBox[4];
     bool listing, changing, closing;
+    bool firstDiscovery = true;
+    readonly KeyboardInputFilter keyboardFilter;
     public ControllerToolbar(StickView view)
     {
         this.view = view;
+        keyboardFilter = new(view.Session);
+        Application.AddMessageFilter(keyboardFilter);
+        picker.Items.Add(KeyboardSource.Choice);
         Height = 54; Padding = new Padding(20, 8, 20, 8);
         BackColor = Color.FromArgb(24, 30, 42); ForeColor = Color.White;
         var row = new TableLayoutPanel { Dock = DockStyle.Top, Height = 36, ColumnCount = 4, RowCount = 1, Margin = Padding.Empty };
         row.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 105));
         row.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         row.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 108));
-        row.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 120));
+        row.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 160));
         picker.Dock = DockStyle.Fill;
         picker.AccessibleName = "Controller";
         DarkTheme.StylePicker(picker);
         refresh.Dock = DockStyle.Fill;
-        var settingsButton = new Button { Text = "Settings", Dock = DockStyle.Fill, Name = "SettingsButton" };
+        var settingsButton = new Button { Text = "Controller Settings", Dock = DockStyle.Fill, Name = "SettingsButton" };
         DarkTheme.StyleButton(refresh); DarkTheme.StyleButton(settingsButton);
         row.Controls.Add(new Label { Text = "Input Selection", Dock = DockStyle.Fill,
             TextAlign = ContentAlignment.MiddleLeft, ForeColor = Color.FromArgb(180, 190, 205) }, 0, 0);
@@ -36,7 +41,7 @@ sealed class ControllerToolbar : Panel
             bool expanded = !options.Visible;
             options.Visible = expanded;
             Height = expanded ? 164 : 54;
-            settingsButton.Text = expanded ? "Close settings" : "Settings";
+            settingsButton.Text = "Controller Settings";
         };
         var rounding = new CheckBox { Text = "Round to 3 decimals", Checked = true, AutoSize = true, Margin = new Padding(10, 5, 0, 0) };
         rounding.CheckedChanged += (_, _) => { view.RoundDisplay = rounding.Checked; view.Invalidate(); };
@@ -47,8 +52,8 @@ sealed class ControllerToolbar : Panel
             axes[i] = new DarkComboBox { Width = 80, DropDownStyle = ComboBoxStyle.DropDownList };
             DarkTheme.StylePicker(axes[i]);
             inversions[i] = new CheckBox { Text = "Invert", AutoSize = true };
-            axes[i].SelectedIndexChanged += (_, _) => view.Mapping[axis] = axes[axis].SelectedIndex - 1;
-            inversions[i].CheckedChanged += (_, _) => view.Invert[axis] = inversions[axis].Checked;
+            axes[i].SelectedIndexChanged += (_, _) => view.Session.Mapping[axis] = axes[axis].SelectedIndex - 1;
+            inversions[i].CheckedChanged += (_, _) => view.Session.Invert[axis] = inversions[axis].Checked;
             options.Controls.Add(axes[i]); options.Controls.Add(inversions[i]);
         }
         options.SetFlowBreak(inversions[3], true);
@@ -58,61 +63,69 @@ sealed class ControllerToolbar : Panel
         options.Controls.Add(octagonal);
         picker.SelectedIndexChanged += async (_, _) => { if (!listing) await SelectController(); };
         refresh.Click += async (_, _) => await RefreshControllers();
+        if (view.Session.Source == null) picker.SelectedIndex = 0;
     }
     async Task SelectController()
     {
         if (changing || listing || closing) return;
         changing = true; picker.Enabled = refresh.Enabled = false;
-        view.IsConnecting = true; view.Invalidate();
+        view.Session.IsConnecting = true; view.Invalidate();
         try
         {
-            if (view.StopAnalyzer != null) await view.StopAnalyzer();
-            var previous = view.Source; view.Source = null;
-            if (previous != null) await previous.DisposeAsync();
+            await view.Session.CloseSource();
             if (closing) return;
             if (picker.SelectedItem is ControllerChoice choice)
             {
-                var source = await Task.Run(choice.Open);
+                var source = choice.Id == "keyboard" ? choice.Open() : await Task.Run(choice.Open);
                 if (closing) { await source.DisposeAsync(); return; }
-                view.Source = source;
+                view.Session.Source = source;
                 for (int i = 0; i < 4; i++)
                 {
                     axes[i].Items.Clear(); axes[i].Items.Add("None"); axes[i].Items.AddRange(source.Axes);
                     axes[i].SelectedIndex = source.DefaultMapping[i] + 1;
                     inversions[i].Checked = source is JoystickSource or SdlSource && (i == 1 || i == 3);
+                    axes[i].Enabled = inversions[i].Enabled = source is not KeyboardSource;
                 }
             }
         }
         catch (Exception ex) { if (!closing) MessageBox.Show(FindForm(), ex.Message, "Controller unavailable"); }
         finally
         {
-            changing = false; view.IsConnecting = false; view.Invalidate();
+            changing = false; view.Session.IsConnecting = false; view.Invalidate();
             picker.Enabled = refresh.Enabled = !closing;
         }
     }
     public async Task RefreshControllers()
     {
         if (changing || listing || closing) return;
-        string? selected = (picker.SelectedItem as ControllerChoice)?.Id;
+        string? selected = firstDiscovery ? null : (picker.SelectedItem as ControllerChoice)?.Id;
+        firstDiscovery = false;
         try
         {
             listing = true;
             picker.Enabled = refresh.Enabled = false;
-            view.IsScanning = true; view.Invalidate();
-            if (view.StopAnalyzer != null) await view.StopAnalyzer();
-            var choices = await Task.Run(ControllerSource.Discover);
+            view.Session.IsScanning = true; view.Invalidate();
+            if (view.Session.StopAnalyzer != null) await view.Session.StopAnalyzer();
+            List<ControllerChoice> choices;
+            try { choices = await Task.Run(ControllerSource.Discover); }
+            catch (Exception ex)
+            {
+                if (!closing) MessageBox.Show(FindForm(), $"Controller discovery failed: {ex.Message}\nKeyboard input is still available.", "Controller discovery");
+                choices = [];
+            }
+            choices.Add(KeyboardSource.Choice);
             if (closing) return;
             picker.Items.Clear(); picker.Items.AddRange(choices.ToArray());
             int index = choices.FindIndex(c => c.Id == selected);
             if (index < 0) index = choices.FindIndex(c => c.Id.StartsWith("sdl:", StringComparison.OrdinalIgnoreCase) && c.Id != "sdl:unavailable");
             picker.SelectedIndex = index >= 0 ? index : choices.Count > 0 ? 0 : -1;
             listing = false;
-            if (view.Source == null || (picker.SelectedItem as ControllerChoice)?.Id != selected) await SelectController();
+            if (view.Session.Source == null || (picker.SelectedItem as ControllerChoice)?.Id != selected) await SelectController();
         }
         catch (Exception ex) { if (!closing) MessageBox.Show(FindForm(), ex.Message, "Controller discovery"); }
         finally
         {
-            listing = false; view.IsScanning = false; view.Invalidate();
+            listing = false; view.Session.IsScanning = false; view.Invalidate();
             picker.Enabled = refresh.Enabled = !closing && !changing;
         }
     }
@@ -121,8 +134,11 @@ sealed class ControllerToolbar : Panel
         closing = true;
         // Native discovery cannot be cancelled safely; wait asynchronously before SDL shutdown.
         while (changing || listing) await Task.Delay(10);
-        if (view.StopAnalyzer != null) await view.StopAnalyzer();
-        if (view.Source != null) { await view.Source.DisposeAsync(); view.Source = null; }
+        await view.Session.CloseSource();
+    }
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing) Application.RemoveMessageFilter(keyboardFilter);
+        base.Dispose(disposing);
     }
 }
-

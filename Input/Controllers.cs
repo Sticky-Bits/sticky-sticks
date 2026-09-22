@@ -5,6 +5,7 @@ sealed record ControllerFrame(double[] Values, long[] Raw, string Detail)
     public long Timestamp { get; init; } = System.Diagnostics.Stopwatch.GetTimestamp();
     // Common XInput-style range (0..255); null when the backend cannot identify RT.
     public double? RightTrigger { get; init; }
+    public double? LeftTrigger { get; init; }
 }
 sealed record ControllerChoice(string Id, string Name, Func<ControllerSource> Open)
 {
@@ -45,7 +46,7 @@ sealed class XboxSource(uint slot) : ControllerSource
         if (!XInput.TryRead(slot, out var s)) return null;
         var g = s.Gamepad;
         return new([XInput.Normalize(g.LX), XInput.Normalize(g.LY), XInput.Normalize(g.RX), XInput.Normalize(g.RY)],
-            [g.LX, g.LY, g.RX, g.RY], $"Packet: {s.Packet}   Buttons: 0x{g.Buttons:X4}   LT: {g.LeftTrigger}   RT: {g.RightTrigger}") { RightTrigger = g.RightTrigger };
+            [g.LX, g.LY, g.RX, g.RY], $"Packet: {s.Packet}   Buttons: 0x{g.Buttons:X4}   LT: {g.LeftTrigger}   RT: {g.RightTrigger}") { RightTrigger = g.RightTrigger, LeftTrigger = g.LeftTrigger };
     }
 }
 sealed class SwitchSource : ControllerSource
@@ -74,7 +75,7 @@ sealed class SwitchSource : ControllerSource
                 int rx = r[9] | ((r[10] & 15) << 8), ry = (r[10] >> 4) | (r[11] << 4);
                 latest = new([c.Left.X.Normalize(lx), c.Left.Y.Normalize(ly), c.Right.X.Normalize(rx), c.Right.Y.Normalize(ry)],
                     [lx, ly, rx, ry], $"Calibration: L {c.Left.Source} / R {c.Right.Source}   Centers: {c.Left.X.Center}, {c.Left.Y.Center}, {c.Right.X.Center}, {c.Right.Y.Center}")
-                    { RightTrigger = (r[3] & 0x80) != 0 ? 255 : 0 }; // ZR is digital on the Pro Controller.
+                    { RightTrigger = (r[3] & 0x80) != 0 ? 255 : 0, LeftTrigger = (r[5] & 0x80) != 0 ? 255 : 0 }; // ZR/ZL are digital.
                 Report(latest);
             }
         }
