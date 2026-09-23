@@ -35,6 +35,7 @@ abstract class ControllerSource : IAsyncDisposable
             result.Add(new(path, $"Switch Pro {++n} — direct USB / stored calibration", () => new SwitchSource(path)));
         result.AddRange(JoystickSource.Discover());
         result.AddRange(SdlSource.Discover());
+        result.AddRange(GameCubeSource.Discover());
         return result;
     }
 }

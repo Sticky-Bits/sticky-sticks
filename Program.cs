@@ -4,6 +4,19 @@ using System.Diagnostics;
 using System.Runtime.InteropServices;
 using Microsoft.Win32.SafeHandles;
 
+if (args.Contains("--gamecube-check"))
+{
+    try
+    {
+        GameCubeUsb.VerifyLayouts();
+        var adapters = GameCubeUsb.Discover();
+        Console.WriteLine($"libusb loaded successfully. Compatible GameCube adapters: {adapters.Count}");
+        foreach (var adapter in adapters) Console.WriteLine($"Adapter {adapter.Id}: ports 1–4 available for selection.");
+        return 0;
+    }
+    catch (Exception ex) { Console.Error.WriteLine(ex.Message); return 1; }
+}
+
 if (args.Length == 2 && args[0] == "--profiles-preview")
 {
     var preview = new Thread(() => ProfileLoader.Preview(args[1]));
@@ -111,6 +124,7 @@ if (args.Contains("--self-test"))
     var decoded = Decode(new byte[] { 0x30, 0, 0, 0, 0, 0, 0xBC, 0x3A, 0x12, 0xFF, 0x0F, 0 });
     if (decoded != (0xABC, 0x123, 4095, 0)) throw new Exception("Stick decoding failed.");
     RefactorTests.Run();
+    await GameCubeTests.Run();
     ProfileSaveTests.Run();
     await RefactorTests.SessionLifecycle();
     Calibration.SelfTest();

@@ -16,6 +16,9 @@ sealed class SdlSource : ControllerSource
     {
         if (initialized) return;
         SDL_SetHint("SDL_JOYSTICK_ALLOW_BACKGROUND_EVENTS", "1");
+        // The direct adapter source owns Wii U GameCube USB interfaces. SDL's
+        // HIDAPI GameCube driver can otherwise claim them during enumeration.
+        SDL_SetHint("SDL_JOYSTICK_HIDAPI_GAMECUBE", "0");
         if (!SDL_InitSubSystem(GamepadSubsystem)) throw new InvalidOperationException(Text(SDL_GetError()));
         initialized = true;
         // WinForms owns the window/message loop. Poll SDL explicitly instead of queuing events.

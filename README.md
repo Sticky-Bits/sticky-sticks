@@ -1,6 +1,6 @@
 # Sticky Sticks
 
-A Windows controller visualizer and thumbstick analyzer, with a settings preview for **Rivals of Aether 2**. Version **0.2**.
+A Windows controller visualizer and thumbstick analyzer, with a settings preview for **Rivals of Aether 2**. Version **0.3**.
 
 ![Application Screenshot](docs/images/sticky-sticks.png)
 
@@ -8,14 +8,11 @@ A Windows controller visualizer and thumbstick analyzer, with a settings preview
 
 Download the `StickySticks-vX.Y-win-x64.zip` asset from **Releases** on GitHub, extract it, then run `StickySticks.exe`.
 
-The repository contains source code, not a ready-to-run application. If no release is available, or you downloaded **Code → Download ZIP**, follow **Build and test** below, then run `publish/StickySticks.exe`.
-Keep `SDL3.dll`, `gamecontrollerdb.txt`, the app DLL/JSON files, and licence files beside the executable (preserving subfolders).
-
 Requires Windows x64 and the [.NET 10 Desktop Runtime (x64)](https://dotnet.microsoft.com/en-us/download/dotnet/10.0). The SDK is only needed to build. If the runtime is missing, the launcher offers a download link. Rivals and Steam are not required. Downloads are unsigned and may trigger Windows reputation warnings.
 
 ## Supported Input sources
 
-Keyboard, SDL 3, XInput, Direct USB for Nintendo Switch Pro controllers, Windows joystick API.
+Keyboard, SDL 3, XInput, Direct USB for Nintendo Switch Pro controllers and Wii U-compatible GameCube adapters, Windows joystick API.
 
 ## Build and test
 
@@ -34,4 +31,4 @@ if ($test.ExitCode -ne 0) { throw 'Tests failed' }
 
 ## Licence
 
-Sticky Sticks is [MIT licensed](LICENSE). SDL and SDL GameControllerDB retain their [zlib licences](THIRD_PARTY_NOTICES.md). This independent project is not affiliated with Aether Studios, Nintendo, Microsoft, or Valve.
+Sticky Sticks is [MIT licensed](LICENSE). SDL and SDL GameControllerDB use zlib licences; the dynamically loaded libusb library uses LGPL-2.1-or-later. See [third-party notices](THIRD_PARTY_NOTICES.md). This independent project is not affiliated with Aether Studios, Nintendo, Microsoft, or Valve.
