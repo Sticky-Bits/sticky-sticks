@@ -11,7 +11,9 @@ static class MechanicStateTests
     {
         if (!Crouch(-.626) || Crouch(.626) || Crouch(-.6259) ||
             !TapStrongs(-.655, 0) || !TapStrongs(0, .655) || TapStrongs(.6549, -.6549) ||
-            !DirectionalSpecials(0, -.42) || DirectionalSpecials(.4199, 0) || !BReverse(-.6) || BReverse(.5999))
+            !DirectionalSpecials(0, -.42) || !DirectionalSpecials(0, .42) ||
+            DirectionalSpecials(1, .4199) || DirectionalSpecials(-1, -.4199) ||
+            !BReverse(-.603) || !BReverse(.603) || BReverse(.6029) || BReverse(-.6029))
             throw new Exception("Fixed directional mechanic thresholds failed.");
         if (!DirectionalInput(-.2876, 0) || !DirectionalInput(0, .2876) ||
             DirectionalInput(.2875, -.2875) || DirectionalInput(.2, -.2) ||

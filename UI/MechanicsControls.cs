@@ -77,7 +77,7 @@ sealed class MechanicsControls : FlowLayoutPanel
             controls.Controls.OfType<RadioButton>().Single(r => r.Text == "Raw coordinates").Checked = true;
             FindMods(pages)!.Controls.OfType<RadioButton>().Single(r => r.Text == "X").Checked = true;
             foreach (var check in controls.Controls.OfType<CheckBox>().Where(c => c.Text != "Show deadzone"))
-                check.Checked = check.Text == "Directional Specials (0.42)";
+                check.Checked = check.Text == "Up/Down specials (0.42)";
             view.Sample();
             form.DrawToBitmap(bitmap, form.ClientRectangle); bitmap.Save(path + ".mod.png");
             form.ClientSize = new Size(1200, 930);

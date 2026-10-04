@@ -16,7 +16,7 @@ static class Mechanics
         new("universal", "Universal minimum input (0.2875)", "Directional input", .2875, true, true, true, Color.FromArgb(70,230,230), Strict: true),
         new("crouch", "Crouch (0.626 down)", "Crouch", .626, false, false, true, Color.FromArgb(255,225,70), LabelOffset: -18),
         new("strong", "Tap Strongs (0.655)", "Tap Strongs", .655, true, true, true, Color.FromArgb(255,110,150)),
-        new("special", "Directional Specials (0.42)", "Directional Specials", .42, true, true, true, Color.FromArgb(130,220,90)),
-        new("reverse", "B Reverse (0.6 left/right)", "B Reverse", .6, true, false, false, Color.FromArgb(100,160,255))
+        new("special", "Up/Down specials (0.42)", "Up/Down specials", .42, false, true, true, Color.FromArgb(130,220,90)),
+        new("reverse", "Side Special / B Reverse (0.603 left/right)", "Side Special / B Reverse", .603, true, false, false, Color.FromArgb(100,160,255))
     });
 }
