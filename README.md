@@ -1,6 +1,6 @@
 # Sticky Sticks
 
-A Windows controller visualizer and thumbstick analyzer, with a settings preview for **Rivals of Aether 2**. Version **0.3**.
+A Windows controller visualizer and thumbstick analyzer, with a settings preview for **Rivals of Aether 2**. Version **0.4**.
 
 ![Application Screenshot](docs/images/sticky-sticks.png)
 
